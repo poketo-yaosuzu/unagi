@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<title>予約ダッシュボード</title>
+
+<style>
+body {
+  font-family: "Noto Sans JP", sans-serif;
+  background: #f1f3f4;
+  padding: 16px;
+  margin: 0;
+}
+
+h2, h3 {
+  margin: 0 0 12px;
+  color: #333;
+  font-weight: 700;
+}
+
+  table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  background: #fff;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 8px;
+}
+
+  thead tr {
+  background: #06c755;
+  color: #fff;
+}
+  
+  
+#store-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.store-btn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.store-btn.active {
+  background: #06c755;
+  color: #fff;
+  border-color: #06c755;
+}
+
+#product-select {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.card {
+  background: #fff;
+  padding: 14px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+
+.time-block {
+  background: #fff;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  border-left: 6px solid #06c755;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.time-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: #06c755;
+}
+
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+  
+  @media print {
+
+  /* 余白を A4 用に調整 */
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  /* 背景色を印刷 */
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background: #fff;
+    font-size: 16px; /* 全体フォント少し大きめ */
+  }
+
+  /* ボタン類は非表示 */
+  #store-buttons,
+  #product-select,
+  #product-select + div,
+  button {
+    display: none !important;
+  }
+　.title-row button {
+    display: none !important;
+  }
+
+  /* テーブルの見やすさ向上 */
+  table {
+    font-size: 15px;
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    border: 1px solid #555 !important; /* 枠線を濃く */
+    padding: 6px 8px !important;
+  }
+
+  thead tr {
+    background: #06c755 !important; /* 緑のヘッダーを印刷 */
+    color: #fff !important;
+  }
+
+  /* カード（商品別集計） */
+  .card {
+    border: 1px solid #555 !important;
+    box-shadow: none !important;
+    font-size: 16px;
+  }
+
+  /* 時間帯ブロック */
+  .time-block {
+    border: 1px solid #555 !important;
+    border-left: 6px solid #06c755 !important;
+    box-shadow: none !important;
+    font-size: 16px;
+  }
+
+  .time-title {
+    font-size: 18px;
+  }
+}
+
+.product-tag {
+  display: inline-flex;
+  align-items: center;
+  background: #06c755;
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 13px;
+}
+
+.product-tag button {
+  background: transparent;
+  border: none;
+  color: #fff;
+  margin-left: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- タイトル + 印刷ボタン -->
+<div class="title-row">
+  <h2>うなぎ予約一覧</h2>
+  <button class="store-btn" onclick="printDashboard()">印刷する</button>
+</div>
+
+<!-- 店舗フィルター -->
+<div id="store-buttons">
+  <button class="store-btn active" onclick="filterStore('all', this)">全体</button>
+  <button class="store-btn" onclick="filterStore('ポケット店', this)">ポケット店</button>
+  <button class="store-btn" onclick="filterStore('アップティ店', this)">アップティ店</button>
+  <button class="store-btn" onclick="filterStore('キララ店', this)">キララ店</button>
+  <button class="store-btn" onclick="filterStore('総菜工場', this)">総菜工場</button>
+</div>
+
+<h3>商品フィルターとCSVダウンロード</h3>
+<div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 16px;">
+  <div>
+    <div id="product-tags" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;"></div>
+    <select id="product-select" multiple size="4" onchange="addSelectedProducts()">
+      <option value="all">全商品</option>
+    </select>
+  </div>
+
+  <div>
+    <button class="store-btn" onclick="downloadCSV()">予約一覧 CSV</button>
+    <button class="store-btn" onclick="downloadProductCSV()">商品別 CSV</button>
+    <button class="store-btn" onclick="downloadTimeCSV()">時間帯別 CSV</button>
+  </div>
+</div>
+
+<!-- 予約一覧 -->
+<div id="list">読み込み中…</div>
+
+<h3>商品ごとの必要数</h3>
+<div id="summary"></div>
+
+<h3>時間帯ごとの必要数</h3>
+<div id="time-summary"></div>
+
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzcZSKIO3yMwgz6jzQmdQsBVVFJd4LJq-ZVfisLzgjksQoI_eVFRIhnPN2Xj_-ndL-mFw/exec";
+
+let dashboardData = [];
+let selectedStore = "all";
+let selectedProduct = [];
+
+/************************************
+ * 初期ロード
+ ************************************/
+async function loadDashboard() {
+  Swal.fire({
+    title: "読み込み中…",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  const res = await fetch(`${GAS_URL}?mode=dashboard`);
+  const json = await res.json();
+
+  Swal.close();
+
+  dashboardData = json.list;
+
+  renderList(dashboardData);
+
+  const summary = calcSummary(dashboardData);
+  renderSummary(summary);
+  renderProductSelect(summary);
+
+  const timeSummary = calcTimeSummary(dashboardData);
+  renderTimeSummary(timeSummary);
+}
+
+/************************************
+ * 商品プルダウン生成
+ ************************************/
+function renderProductSelect(summary) {
+  const select = document.getElementById("product-select");
+  select.innerHTML = `<option value="all">全商品</option>`;
+
+  Object.keys(summary).forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    select.appendChild(opt);
+  });
+}
+
+/************************************
+ * 商品タグ表示
+ ************************************/
+function renderProductTags() {
+  const tagArea = document.getElementById("product-tags");
+  tagArea.innerHTML = "";
+
+  selectedProduct.forEach(name => {
+    const tag = document.createElement("div");
+    tag.className = "product-tag";
+    tag.innerHTML = `
+      ${name}
+      <button onclick="removeProductTag('${name}')">×</button>
+    `;
+    tagArea.appendChild(tag);
+  });
+}
+
+function removeProductTag(name) {
+  selectedProduct = selectedProduct.filter(p => p !== name);
+  renderProductTags();
+  applyFilters();
+}
+
+/************************************
+ * 商品追加（複数選択 → タグ化）
+ ************************************/
+function addSelectedProducts() {
+  const select = document.getElementById("product-select");
+  const values = Array.from(select.selectedOptions).map(o => o.value);
+
+  if (values.includes("all")) {
+    selectedProduct = [];
+  } else {
+    values.forEach(v => {
+      if (!selectedProduct.includes(v)) {
+        selectedProduct.push(v);
+      }
+    });
+  }
+
+  renderProductTags();
+  applyFilters();
+}
+
+/************************************
+ * 店舗フィルター
+ ************************************/
+function filterStore(store, btn) {
+  selectedStore = store;
+
+  Swal.fire({
+    title: "更新中…",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
+  setTimeout(() => {
+    document.querySelectorAll(".store-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+
+    applyFilters();
+    Swal.close();
+  }, 150);
+}
+
+/************************************
+ * 店舗 × 商品の複合フィルター
+ ************************************/
+function applyFilters() {
+  let filtered = dashboardData;
+
+  // 店舗フィルター
+  if (selectedStore !== "all") {
+    filtered = filtered.filter(r => r.store === selectedStore);
+  }
+
+  // 商品フィルター（予約単位で絞り込み）
+  if (selectedProduct.length > 0) {
+    filtered = filtered.filter(r => {
+      const items = JSON.parse(r.items);
+      return items.some(i => selectedProduct.includes(i.name));
+    });
+  }
+
+  // ★ 商品フィルターを items に反映（ここが最重要）
+  filtered = filtered.map(r => {
+    const newItems = JSON.parse(r.items).filter(i =>
+      selectedProduct.length === 0 || selectedProduct.includes(i.name)
+    );
+    return { ...r, items: JSON.stringify(newItems) };
+  });
+
+  // 予約一覧
+  renderList(filtered);
+
+  // 商品別集計
+  const summary = calcSummary(filtered);
+  renderSummary(summary);
+
+  // 時間帯別集計（items がフィルター済みなので正しく動く）
+  const timeSummary = calcTimeSummary(filtered);
+  renderTimeSummary(timeSummary);
+}
+
+/************************************
+ * 予約一覧表示（商品フィルター対応）
+ ************************************/
+function renderList(data) {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  const table = document.createElement("table");
+
+  const thead = document.createElement("thead");
+  thead.innerHTML = `
+    <tr>
+      <th>予約番号</th>
+      <th>名前</th>
+      <th>電話番号</th>
+      <th>受取時間</th>
+      <th>店舗</th>
+      <th>商品一覧</th>
+      <th>備考</th>
+    </tr>
+  `;
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+
+  data.forEach(r => {
+    const tr = document.createElement("tr");
+
+    const filteredItems = JSON.parse(r.items)
+      .filter(i => selectedProduct.length === 0 || selectedProduct.includes(i.name))
+      .map(i => `${i.name} ×${i.qty}`)
+      .join("<br>");
+
+    tr.innerHTML = `
+      <td>${r.reservationId}</td>
+      <td>${r.name}</td>
+      <td>${r.phone}</td>
+      <td>${r.pickupTime}</td>
+      <td>${r.store}</td>
+      <td>${filteredItems}</td>
+      <td>${r.memo || ""}</td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
+  list.appendChild(table);
+}
+
+/************************************
+ * 商品別集計
+ ************************************/
+function calcSummary(data) {
+  const summary = {};
+
+  data.forEach(r => {
+    const items = JSON.parse(r.items);
+    items.forEach(i => {
+      if (!summary[i.name]) summary[i.name] = 0;
+      summary[i.name] += Number(i.qty);
+    });
+  });
+
+  return summary;
+}
+
+function renderSummary(summary) {
+  const el = document.getElementById("summary");
+  el.innerHTML = "";
+
+  Object.keys(summary).forEach(name => {
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `<strong>${name}</strong>：${summary[name]} 個`;
+    el.appendChild(div);
+  });
+}
+
+/************************************
+ * 時間帯別集計
+ ************************************/
+function calcTimeSummary(data) {
+  const summary = {};
+
+  data.forEach(r => {
+    const time = r.pickupTime;
+    const items = JSON.parse(r.items); // ← applyFilters() でフィルター済み
+
+    if (!summary[time]) summary[time] = {};
+
+    items.forEach(i => {
+      if (!summary[time][i.name]) summary[time][i.name] = 0;
+      summary[time][i.name] += Number(i.qty);
+    });
+  });
+
+  return summary;
+}
+
+function renderTimeSummary(summary) {
+  const el = document.getElementById("time-summary");
+  el.innerHTML = "";
+
+  const times = Object.keys(summary).sort();
+
+  times.forEach(time => {
+    const block = document.createElement("div");
+    block.className = "time-block";
+
+    let html = `<div class="time-title">${time}</div>`;
+
+    const items = summary[time];
+    Object.keys(items).forEach(name => {
+      html += `<div>${name}：<strong>${items[name]}</strong> 個</div>`;
+    });
+
+    block.innerHTML = html;
+    el.appendChild(block);
+  });
+}
+
+/************************************
+ * CSV（予約一覧 / 商品別 / 時間帯別）
+ ************************************/
+function downloadCSV() {
+  let filtered = dashboardData;
+
+  if (selectedStore !== "all") {
+    filtered = filtered.filter(r => r.store === selectedStore);
+  }
+
+  if (selectedProduct.length > 0) {
+    filtered = filtered.filter(r => {
+      const items = JSON.parse(r.items);
+      return items.some(i => selectedProduct.includes(i.name));
+    });
+  }
+
+  let csv = "予約番号,名前,電話番号,受取時間,店舗,商品一覧,備考\n";
+
+  filtered.forEach(r => {
+    const items = JSON.parse(r.items)
+      .filter(i => selectedProduct.length === 0 || selectedProduct.includes(i.name))
+      .map(i => `${i.name}×${i.qty}`)
+      .join(" / ");
+
+    const row = [
+      r.reservationId,
+      r.name,
+      r.phone,
+      r.pickupTime,
+      r.store,
+      items,
+      r.memo || ""
+    ].map(v => `"${v}"`).join(",");
+
+    csv += row + "\n";
+  });
+
+  exportCSV(csv, "うなぎ予約一覧.csv");
+}
+
+function downloadProductCSV() {
+  let filtered = dashboardData;
+
+  if (selectedStore !== "all") {
+    filtered = filtered.filter(r => r.store === selectedStore);
+  }
+
+  if (selectedProduct.length > 0) {
+    filtered = filtered.filter(r => {
+      const items = JSON.parse(r.items);
+      return items.some(i => selectedProduct.includes(i.name));
+    });
+  }
+
+  const summary = calcSummary(filtered);
+
+  let csv = "商品名,数量\n";
+
+  Object.keys(summary).forEach(name => {
+    csv += `"${name}",${summary[name]}\n`;
+  });
+
+  exportCSV(csv, "うなぎ商品別.csv");
+}
+
+function downloadTimeCSV() {
+  let filtered = dashboardData;
+
+  if (selectedStore !== "all") {
+    filtered = filtered.filter(r => r.store === selectedStore);
+  }
+
+  if (selectedProduct.length > 0) {
+    filtered = filtered.filter(r => {
+      const items = JSON.parse(r.items);
+      return items.some(i => selectedProduct.includes(i.name));
+    });
+  }
+
+  const summary = calcTimeSummary(filtered);
+
+  let csv = "時間帯,商品名,数量\n";
+
+  Object.keys(summary).sort().forEach(time => {
+    const items = summary[time];
+    Object.keys(items).forEach(name => {
+      csv += `"${time}","${name}",${items[name]}\n`;
+    });
+  });
+
+  exportCSV(csv, "うなぎ時間別.csv");
+}
+
+function exportCSV(csv, filename) {
+  const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
+  const blob = new Blob([bom, csv], { type: "text/csv" });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/************************************
+ * 印刷
+ ************************************/
+function printDashboard() {
+  window.print();
+}
+
+loadDashboard();
+</script>
+
+</body>
+</html>
